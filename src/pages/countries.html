@@ -1,0 +1,19 @@
+{% extends "app.html" %}
+
+{% block title %}ziggy view:countries{% endblock %}
+
+{% block page %}
+<h1>view:countries — master detail</h1>
+<p class="chrome"><button type="button" onclick="zcTheme.toggle()">theme</button></p>
+<p>
+  Click a column header to sort, click &#9432; to show country details —
+  selecting patches only the detail card and the row's button.
+  <a href="/">&larr; back to counter</a>
+</p>
+{% endblock %}
+
+{% block page_script %}
+<script>
+Live.start({ container: 'lv', log: 'log', topic: 'view:countries' });
+</script>
+{% endblock %}

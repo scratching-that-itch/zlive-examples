@@ -1,0 +1,140 @@
+// The demo's pages: rendered from templates at build time and embedded in
+// the binary.
+//
+// A page file is no longer a whole document. It extends one of the two
+// layouts in `src/templates/` — `base.html` for a plain document, `app.html`
+// for a live page (stylesheet, `#lv`/`#log`, and the client/hooks/theme
+// scripts) — and fills in blocks. `src/render_pages.zig` resolves each page's
+// inheritance chain, and the build copies the result to
+// `src/pages_rendered/<name>`, which is what this file embeds.
+//
+// Rendering at build time keeps the server's page table `comptime` (each
+// handler bakes its page's bytes), so the binary still serves everything
+// itself: no static directory, no working-directory requirement, no
+// per-request file I/O. Everything stays under `src/` because `@embedFile`
+// is bounded by the module root.
+
+const std = @import("std");
+
+/// One page: its route, the name its content type comes from, and its
+/// rendered bytes.
+pub const Page = struct {
+    path: []const u8,
+    file: []const u8,
+    bytes: []const u8,
+};
+
+/// Every page the demo serves, in route form.
+pub const all = [_]Page{
+    .{ .path = "/", .file = "index.html", .bytes = @embedFile("pages_rendered/index.html") },
+    .{ .path = "/counter", .file = "counter.html", .bytes = @embedFile("pages_rendered/counter.html") },
+    .{ .path = "/table", .file = "table.html", .bytes = @embedFile("pages_rendered/table.html") },
+    .{ .path = "/form", .file = "form.html", .bytes = @embedFile("pages_rendered/form.html") },
+    .{ .path = "/tabs", .file = "tabs.html", .bytes = @embedFile("pages_rendered/tabs.html") },
+    .{ .path = "/countries", .file = "countries.html", .bytes = @embedFile("pages_rendered/countries.html") },
+    .{ .path = "/room", .file = "room.html", .bytes = @embedFile("pages_rendered/room.html") },
+    .{ .path = "/sidebar", .file = "sidebar.html", .bytes = @embedFile("pages_rendered/sidebar.html") },
+    .{ .path = "/themes", .file = "themes.html", .bytes = @embedFile("pages_rendered/themes.html") },
+    // Dev-only isolation probes (morphdom keyed reorder, Floating UI load,
+    // dropdown positioning). They extend the plain document layout.
+    .{ .path = "/test-morph.html", .file = "test-morph.html", .bytes = @embedFile("pages_rendered/test-morph.html") },
+    .{ .path = "/test-floating.html", .file = "test-floating.html", .bytes = @embedFile("pages_rendered/test-floating.html") },
+    .{ .path = "/test-dd.html", .file = "test-dd.html", .bytes = @embedFile("pages_rendered/test-dd.html") },
+};
+
+/// The page theme toggle, served at `/theme.js`.
+pub const theme_js = @embedFile("pages/theme.js");
+
+test "every page is embedded, non-empty, and routed uniquely" {
+    var seen: [all.len][]const u8 = undefined;
+    for (all, 0..) |page, i| {
+        try std.testing.expect(page.path.len > 0);
+        try std.testing.expect(page.path[0] == '/');
+        try std.testing.expect(page.bytes.len > 0);
+        for (seen[0..i]) |other| {
+            try std.testing.expect(!std.mem.eql(u8, other, page.path));
+        }
+        seen[i] = page.path;
+    }
+    try std.testing.expect(theme_js.len > 0);
+}
+
+test "the pages are the demo's HTML" {
+    const index = all[0];
+    try std.testing.expectEqualStrings("/", index.path);
+    try std.testing.expect(std.mem.startsWith(u8, index.bytes, "<!DOCTYPE html>"));
+    try std.testing.expect(std.mem.indexOf(u8, index.bytes, "Live.start") != null);
+}
+
+test "every page is one complete document after inheritance" {
+    for (all) |page| {
+        try std.testing.expect(std.mem.startsWith(u8, page.bytes, "<!DOCTYPE html>"));
+        try std.testing.expect(std.mem.endsWith(u8, std.mem.trimEnd(u8, page.bytes, " \t\r\n"), "</html>"));
+        try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, page.bytes, "<!DOCTYPE html>"));
+        try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, page.bytes, "<head>"));
+        try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, page.bytes, "<body>"));
+        try std.testing.expectEqual(@as(usize, 0), std.mem.count(u8, page.bytes, "{%"));
+        try std.testing.expectEqual(@as(usize, 0), std.mem.count(u8, page.bytes, "{{"));
+        // The stylesheet link lives in app.html; a page that adds its own
+        // would be extending the wrong layout (form.html used to).
+        try std.testing.expect(std.mem.count(u8, page.bytes, "/zc.css") <= 1);
+    }
+}
+
+test "the live pages share the app layout's shell" {
+    for (all) |page| {
+        if (std.mem.startsWith(u8, page.path, "/test-")) continue;
+        try std.testing.expect(std.mem.indexOf(u8, page.bytes, "<div id=\"lv\">") != null);
+        try std.testing.expect(std.mem.indexOf(u8, page.bytes, "<ul id=\"log\"></ul>") != null);
+        try std.testing.expect(std.mem.indexOf(u8, page.bytes, "src=\"client.js\"") != null);
+        try std.testing.expect(std.mem.indexOf(u8, page.bytes, "src=\"hooks.js\"") != null);
+        try std.testing.expect(std.mem.indexOf(u8, page.bytes, "src=\"theme.js\"") != null);
+        try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, page.bytes, "src=\"client.js\""));
+    }
+}
+
+test "the frozen pages still use the runtime that needs no live shell" {
+    // test-morph.html and test-floating.html are client-only probes: they
+    // extend base.html and must not get app.html's stylesheet or client.
+    for (all) |page| {
+        const probe = std.mem.eql(u8, page.path, "/test-morph.html") or
+            std.mem.eql(u8, page.path, "/test-floating.html");
+        if (!probe) continue;
+        try std.testing.expect(std.mem.indexOf(u8, page.bytes, "zc.css") == null);
+        try std.testing.expect(std.mem.indexOf(u8, page.bytes, "client.js") == null);
+        try std.testing.expect(std.mem.indexOf(u8, page.bytes, "id=\"lv\"") == null);
+    }
+}
+
+test "titles survive the inheritance chain" {
+    const expected = [_]struct { path: []const u8, title: []const u8 }{
+        .{ .path = "/", .title = "<title>ziggy kitchen sink</title>" },
+        .{ .path = "/table", .title = "<title>ziggy view:table</title>" },
+        .{ .path = "/tabs", .title = "<title>ziggy view:tabs</title>" },
+        .{ .path = "/room", .title = "<title>ziggy room — scoped state</title>" },
+        .{ .path = "/test-morph.html", .title = "<title>morphdom keyed reorder repro</title>" },
+    };
+    for (expected) |want| {
+        var found = false;
+        for (all) |page| {
+            if (!std.mem.eql(u8, page.path, want.path)) continue;
+            found = true;
+            try std.testing.expect(std.mem.indexOf(u8, page.bytes, want.title) != null);
+        }
+        try std.testing.expect(found);
+    }
+}
+
+test "the floating-ui partial is included where menus can open" {
+    for (all) |page| {
+        const needs_floating = std.mem.eql(u8, page.path, "/") or
+            std.mem.eql(u8, page.path, "/table") or
+            std.mem.eql(u8, page.path, "/sidebar") or
+            std.mem.eql(u8, page.path, "/test-floating.html") or
+            std.mem.eql(u8, page.path, "/test-dd.html");
+        const has_core = std.mem.indexOf(u8, page.bytes, "floating-ui.core") != null;
+        const has_dom = std.mem.indexOf(u8, page.bytes, "floating-ui.dom") != null;
+        try std.testing.expectEqual(needs_floating, has_core);
+        try std.testing.expectEqual(needs_floating, has_dom);
+    }
+}

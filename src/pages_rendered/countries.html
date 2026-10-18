@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ziggy view:countries</title>
+
+<link rel="stylesheet" href="/zc.css">
+
+
+</head>
+<body>
+
+
+<h1>view:countries — master detail</h1>
+<p class="chrome"><button type="button" onclick="zcTheme.toggle()">theme</button></p>
+<p>
+  Click a column header to sort, click &#9432; to show country details —
+  selecting patches only the detail card and the row's button.
+  <a href="/">&larr; back to counter</a>
+</p>
+
+<div id="lv">connecting…</div>
+<ul id="log"></ul>
+
+
+<script src="https://unpkg.com/morphdom@2.6.1/dist/morphdom-umd.js"></script>
+
+<script src="client.js"></script>
+<script src="hooks.js"></script>
+<script src="theme.js"></script>
+
+<script>
+Live.start({ container: 'lv', log: 'log', topic: 'view:countries' });
+</script>
+
+
+</body>
+</html>

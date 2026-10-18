@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block head %}
+<link rel="stylesheet" href="/zc.css">
+{% block head_extra %}{% endblock %}
+{% endblock %}
+
+{% block body %}
+{% block page %}{% endblock %}
+<div id="lv">connecting…</div>
+<ul id="log"></ul>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/morphdom@2.6.1/dist/morphdom-umd.js"></script>
+{% block vendor %}{% endblock %}
+<script src="client.js"></script>
+<script src="hooks.js"></script>
+<script src="theme.js"></script>
+{% block page_script %}{% endblock %}
+{% endblock %}

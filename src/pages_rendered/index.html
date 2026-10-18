@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ziggy kitchen sink</title>
+
+<link rel="stylesheet" href="/zc.css">
+
+
+</head>
+<body>
+
+
+<h1>ziggy kitchen sink</h1>
+<p class="chrome">
+  <button type="button" onclick="zcTheme.toggle()">theme</button>
+  <a href="/counter">counter demo &rarr;</a> · <a href="/table">table &rarr;</a> ·
+  <a href="/form">form &rarr;</a> · <a href="/tabs">tabs &rarr;</a> ·
+  <a href="/countries">countries &rarr;</a> ·
+  <a href="/room?room=alpha">room (scoped state) &rarr;</a> ·
+  <a href="/sidebar">sidebar block &rarr;</a> ·
+  <a href="/themes">themes &rarr;</a>
+</p>
+<p>Every component on one page, one WebSocket, one patch stream.</p>
+
+<div id="lv">connecting…</div>
+<ul id="log"></ul>
+
+
+<script src="https://unpkg.com/morphdom@2.6.1/dist/morphdom-umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@floating-ui/core@1.6.8/dist/floating-ui.core.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@floating-ui/dom@1.6.13/dist/floating-ui.dom.umd.min.js"></script>
+
+<script src="client.js"></script>
+<script src="hooks.js"></script>
+<script src="theme.js"></script>
+
+<script>
+Live.start({ container: 'lv', log: 'log', topic: 'view:kitchen' });
+
+
+// forms submit through the protocol, not a page reload
+document.getElementById('lv').addEventListener('submit', (ev) => {
+  ev.preventDefault();
+  Live.send('submit');
+});
+</script>
+
+
+</body>
+</html>

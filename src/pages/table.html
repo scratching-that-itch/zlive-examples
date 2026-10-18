@@ -1,0 +1,45 @@
+{% extends "app.html" %}
+
+{% block title %}ziggy view:table{% endblock %}
+
+{% block page %}
+<h1>view:table — 100 rows, live-editable</h1>
+<p class="chrome"><button type="button" onclick="zcTheme.toggle()">theme</button></p>
+<p>
+  Click a column header to sort, double-click a cell to edit it (Name: any
+  text up to 24 chars; Score: an integer), open &#8942; for row actions —
+  the menu is positioned by Floating UI <em>inside</em> an
+  overflow-hidden cell, the z-index/positioning torture test.
+  <a href="/">&larr; back to counter</a>
+</p>
+{% endblock %}
+
+{% block vendor %}{% include "floating.html" %}{% endblock %}
+
+{% block page_script %}
+<script>
+Live.start({ container: 'lv', log: 'log', topic: 'view:table' });
+
+const lv = document.getElementById('lv');
+
+// click a header cell -> sort by that column
+lv.addEventListener('click', (ev) => {
+  const th = ev.target.closest('thead th');
+  if (!th) return;
+  const col = Array.prototype.indexOf.call(th.parentElement.children, th);
+  Live.send('sort', { col });
+});
+
+// double-click a body cell -> edit
+lv.addEventListener('dblclick', (ev) => {
+  const td = ev.target.closest('tbody td');
+  if (!td) return;
+  const tr = td.parentElement;
+  const row = Array.prototype.indexOf.call(tr.parentElement.children, tr);
+  const col = Array.prototype.indexOf.call(tr.children, td);
+  const value = window.prompt('New value:', td.textContent);
+  if (value === null) return;
+  Live.send('edit_cell', { row, col, value });
+});
+</script>
+{% endblock %}

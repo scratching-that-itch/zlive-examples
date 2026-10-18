@@ -1,0 +1,23 @@
+.{
+    .name = .zlive_examples,
+    .version = "0.1.0",
+    .minimum_zig_version = "0.17.0",
+    .fingerprint = 0x5a118e2ac19848e5,
+    .dependencies = .{
+        // The framework: render engine, protocol, client runtime, and the
+        // HTTP/WebSocket transport. The app does not depend on httpz — the
+        // framework owns that.
+        .zlive = .{ .path = "../zlive" },
+        // The component library (module name "zlive_components").
+        .zlive_components = .{ .path = "../zlive-components" },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "static",
+        "scripts",
+        "README.md",
+        "LICENSE",
+    },
+}

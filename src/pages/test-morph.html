@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}morphdom keyed reorder repro{% endblock %}
+
+{% block body %}
+<div id="c">
+<table><tbody>
+<tr id="r0"><td>Row 0</td><td>0</td><td><button id="m0">m0</button></td></tr>
+<tr id="r1"><td>Row 1</td><td>1</td><td><button id="m1">m1</button></td></tr>
+<tr id="r2"><td>Row 2</td><td>2</td><td><button id="m2">m2</button></td></tr>
+</tbody></table>
+</div>
+<pre id="out"></pre>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/morphdom@2.6.1/dist/morphdom-umd.js"></script>
+<script>
+const target = '<table><tbody>' +
+  '<tr id="r1"><td>Row 1</td><td>1</td><td><button id="m1">m1</button></td></tr>' +
+  '<tr id="r2"><td>Row 2</td><td>2</td><td><button id="m2">m2</button></td></tr>' +
+  '<tr id="r0"><td>Row 0</td><td>0</td><td><button id="m0">m0</button></td></tr>' +
+  '</tbody></table>';
+morphdom(document.getElementById('c'), '<div>' + target + '</div>', { childrenOnly: true });
+const trs = document.querySelectorAll('#c tbody tr');
+const lines = [];
+trs.forEach(tr => lines.push(tr.id + ': ' + tr.textContent.trim()));
+lines.push('tbody children: ' + document.querySelector('#c tbody').children.length);
+lines.push('r0 count: ' + document.querySelectorAll('#r0').length);
+document.getElementById('out').textContent = lines.join('\n');
+</script>
+{% endblock %}

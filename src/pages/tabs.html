@@ -1,0 +1,20 @@
+{% extends "app.html" %}
+
+{% block title %}ziggy view:tabs{% endblock %}
+
+{% block page %}
+<h1>view:tabs — zero hooks</h1>
+<p class="chrome"><button type="button" onclick="zcTheme.toggle()">theme</button></p>
+<p>
+  The active tab and open sections are server state; switching patches only
+  the active indicators and the chart region (nested segments). No client
+  hooks involved.
+  <a href="/">&larr; back to counter</a>
+</p>
+{% endblock %}
+
+{% block page_script %}
+<script>
+Live.start({ container: 'lv', log: 'log', topic: 'view:tabs' });
+</script>
+{% endblock %}

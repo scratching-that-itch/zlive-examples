@@ -1,0 +1,90 @@
+{% extends "app.html" %}
+
+{% block title %}ziggy themes — all of shadcn's palettes{% endblock %}
+
+{% block head_extra %}
+<style>
+  /* The gallery's own layout. The palettes themselves are not here: every
+     card is a wrapper carrying data-base / data-accent, and the stylesheet's
+     theme blocks do the colouring. */
+  body { max-width: 76rem; }
+  h1 { margin-bottom: 0.25rem; }
+  h2 { margin: 2rem 0 0.75rem; font-size: 1.1rem; }
+  .tm-intro { color: var(--muted-foreground); max-width: 60rem; font-size: 0.9rem; }
+  code { font-size: 0.85em; }
+
+  .tm-picker { border: 1px solid var(--border); border-radius: var(--radius-lg);
+               background: var(--card); padding: 0.9rem 1rem; margin: 1rem 0 1.5rem; }
+  .tm-pick-label { margin: 0.5rem 0 0.25rem; font-size: 0.75rem; font-weight: 500;
+                   text-transform: uppercase; letter-spacing: 0.05em;
+                   color: var(--muted-foreground); }
+  .tm-picker .tm-pick-label:first-child { margin-top: 0; }
+  .tm-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.375rem; }
+  /* the button that is the current choice */
+  /* #lv + a later declaration: the Button variant rules live in zc.css and
+     would otherwise win this tie. */
+  #lv .tm-picker .btn[data-current="true"] { border-color: var(--ring);
+    background: var(--accent); color: var(--accent-foreground); font-weight: 600; }
+
+  .tm-grid { display: grid; gap: 1rem;
+             grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); }
+  /* a preview: its own palette, its own border/radius, so the swatches read
+     the wrapper's tokens rather than the page's */
+  .tm-card { display: flex; flex-direction: column; gap: 0.6rem; padding: 0.9rem;
+             background: var(--background); color: var(--foreground);
+             border: 1px solid var(--border); border-radius: var(--radius-lg); }
+  .tm-name { margin: 0; font-size: 0.875rem; font-weight: 600; }
+  .tm-sw { width: 1.5rem; height: 1.5rem; border-radius: var(--radius-sm);
+           border: 1px solid var(--border); }
+  .tm-bg { background: var(--background); }
+  .tm-charts { display: flex; gap: 0.375rem; }
+  .tm-charts .tm-sw { width: 1.15rem; height: 0.5rem; border: 0; }
+  .tm-chart-1 { background: var(--chart-1); }
+  .tm-chart-2 { background: var(--chart-2); }
+  .tm-chart-3 { background: var(--chart-3); }
+  .tm-chart-4 { background: var(--chart-4); }
+  .tm-chart-5 { background: var(--chart-5); }
+  .tm-buttons { gap: 0.25rem; }
+  .tm-buttons .btn { pointer-events: none; }   /* previews, not controls */
+  .tm-sidebar { display: flex; flex-direction: column; gap: 0.25rem; padding: 0.5rem;
+                background: var(--sidebar); color: var(--sidebar-foreground);
+                border: 1px solid var(--sidebar-border); border-radius: var(--radius-md); }
+  .tm-side-name { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em;
+                  color: color-mix(in oklab, var(--sidebar-foreground) 70%, transparent); }
+  .tm-side-row { padding: 0.3rem 0.4rem; border-radius: var(--radius-sm);
+                 font-size: 0.8rem; }
+  .tm-side-active { background: var(--sidebar-accent); color: var(--sidebar-accent-foreground); }
+  .tm-card .zc-sidebar-menu-badge, .tm-card .tm-side-row { font-variant-numeric: tabular-nums; }
+</style>
+{% endblock %}
+
+{% block page %}
+<h1>ziggy themes</h1>
+<p class="chrome">
+  <a href="/">kitchen sink &rarr;</a> · <a href="/sidebar">sidebar block &rarr;</a>
+</p>
+{% endblock %}
+
+{% block page_script %}
+<script>
+Live.start({ container: 'lv', log: 'log', topic: 'view:themes' });
+
+/* Mark the picker's current choice. The theme is client state (theme.js owns
+   it, localStorage-backed), so this only reflects it back onto the buttons —
+   the server never sees a theme change, and nothing here patches. */
+(function () {
+  const mark = () => {
+    const s = zcTheme.state();
+    document.querySelectorAll('[data-tm-base]').forEach((b) =>
+      b.dataset.current = String(b.dataset.tmBase === s.base));
+    document.querySelectorAll('[data-tm-accent]').forEach((b) =>
+      b.dataset.current = String(b.dataset.tmAccent === s.accent));
+  };
+  window.addEventListener('zc-theme', mark);
+  /* the picker itself arrives over the socket, so re-mark when #lv changes */
+  new MutationObserver(mark).observe(document.getElementById('lv'),
+                                    { childList: true, subtree: true });
+  mark();
+})();
+</script>
+{% endblock %}

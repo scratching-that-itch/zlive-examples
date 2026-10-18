@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}dd morph probe{% endblock %}
+
+{% block body %}
+<div id="c">
+  <button type="button" id="ks-dd-trigger" data-lv-click="zc:dropdown:toggle">Actions</button>
+</div>
+<pre id="out">probing…</pre>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/morphdom@2.6.1/dist/morphdom-umd.js"></script>
+{% include "floating.html" %}
+<script src="client.js"></script>
+<script src="hooks.js"></script>
+<script>
+// replicate client.js's patch flow: morph the container with callbacks
+setTimeout(() => {
+  const c = document.getElementById('c');
+  window.morphdom(c, '<div>' +
+    '<button type="button" id="ks-dd-trigger" data-lv-click="zc:dropdown:toggle">Actions</button>' +
+    '<div class="zc-dropdown" data-lv-hook="zc-dropdown" data-zc-anchor="ks-dd-trigger" role="menu">' +
+    '<button type="button" role="menuitem">item</button></div>' +
+    '</div>', {
+    childrenOnly: true,
+    onNodeAdded: (node) => window.LiveHooks.nodeAdded(node),
+    onNodeDiscarded: (node) => window.LiveHooks.nodeDiscarded(node),
+    onElUpdated: (el) => window.LiveHooks.elUpdated(el),
+  });
+  setTimeout(() => {
+    const panel = document.querySelector('.zc-dropdown');
+    const out = [];
+    out.push('panel exists: ' + !!panel);
+    out.push('inline style: ' + (panel ? JSON.stringify(panel.style.cssText) : 'n/a'));
+    document.getElementById('out').textContent = out.join('\n');
+  }, 500);
+}, 400);
+</script>
+{% endblock %}

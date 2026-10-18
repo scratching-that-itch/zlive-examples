@@ -1,0 +1,25 @@
+{% extends "app.html" %}
+
+{% block title %}ziggy view:form{% endblock %}
+
+{% block page %}
+<h1>view:form — validated live</h1>
+<p class="chrome"><button type="button" onclick="zcTheme.toggle()">theme</button></p>
+<p>
+  Errors appear (and disappear) as diffs while you type. Submitting shows a
+  server-side loading state.
+  <a href="/">&larr; back to counter</a> · <a href="/table">table demo &rarr;</a>
+</p>
+{% endblock %}
+
+{% block page_script %}
+<script>
+Live.start({ container: 'lv', log: 'log', topic: 'view:form' });
+
+// submit through the protocol, not a page reload
+document.getElementById('lv').addEventListener('submit', (ev) => {
+  ev.preventDefault();
+  Live.send('submit');
+});
+</script>
+{% endblock %}
