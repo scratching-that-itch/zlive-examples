@@ -1,3 +1,4 @@
 /.zig-cache/
 /zig-out/
 /zig-pkg/
+scripts/__pycache__/e2e.cpython-314.pyc
