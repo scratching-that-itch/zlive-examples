@@ -2,7 +2,6 @@ const std = @import("std");
 // The framework's build helpers: rendering page layouts (zlive.layout) is a
 // framework feature, like compiling component templates.
 const zlive_build = @import("zlive");
-const page_manifest = @import("src/page_manifest.zig");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -33,8 +32,9 @@ pub fn build(b: *std.Build) void {
         .main = b.createModule(.{ .root_source_file = b.path("src/main.zig"), .target = target, .optimize = optimize }),
         .view = b.createModule(.{ .root_source_file = b.path("src/view.zig"), .target = target, .optimize = optimize }),
         .countries_data = b.createModule(.{ .root_source_file = b.path("src/countries_data.zig"), .target = target, .optimize = optimize }),
-        // The demo's HTML pages and theme script, embedded via @embedFile
-        // (module-root bounded, which is why they live under src/).
+        // The demo's HTML pages and theme script. The route table lives in
+        // src/; the rendered bytes come from the generated "pages_rendered"
+        // module (build cache), added as an import below.
         .pages = b.createModule(.{ .root_source_file = b.path("src/pages.zig"), .target = target, .optimize = optimize }),
         .handler = b.createModule(.{ .root_source_file = b.path("src/handler.zig"), .target = target, .optimize = optimize }),
         .notify = b.createModule(.{ .root_source_file = b.path("src/notify.zig"), .target = target, .optimize = optimize }),
@@ -60,34 +60,39 @@ pub fn build(b: *std.Build) void {
     }
 
     // Pages are templates too: the server's page table is comptime and bakes
-    // each page's bytes into its handler, so a host tool resolves each page's
-    // `{% extends %}` chain before anything embeds the result. The renderer
-    // uses zlive.layout; the framework's copy step writes the rendered pages
-    // to src/pages_rendered/, which src/pages.zig embeds.
-    const render_pages_exe = b.addExecutable(.{
-        .name = "render-pages",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/render_pages.zig"),
-            .target = b.graph.host,
-            .optimize = .debug,
-            .imports = &.{
-                .{ .name = "zlive", .module = zlive_dep.module("zlive") },
-            },
-        }),
+    // each page's bytes into its handler, so the framework renders each
+    // page's `{% extends %}` chain at build time and returns a module that
+    // embeds the results. The app only names its layouts, its pages
+    // directory, and its page entries.
+    const rendered_pages = zlive_build.addRenderedPages(b, zlive_dep, .{
+        .templates = &.{
+            b.path("src/templates/base.html"),
+            b.path("src/templates/app.html"),
+            b.path("src/templates/floating.html"),
+        },
+        .pages_dir = b.path("src/pages"),
+        .entries = &.{
+            "index.html",
+            "counter.html",
+            "table.html",
+            "form.html",
+            "tabs.html",
+            "countries.html",
+            "room.html",
+            "sidebar.html",
+            "themes.html",
+            "test-morph.html",
+            "test-floating.html",
+            "test-dd.html",
+        },
     });
-    const render_pages = zlive_build.addRenderedPages(
-        b,
-        render_pages_exe,
-        &page_manifest.files,
-        "src/pages_rendered/",
-    );
+    app_modules.pages.addImport("pages_rendered", rendered_pages.module);
 
     const exe = b.addExecutable(.{
         .name = "ziggy",
         .root_module = app_modules.main,
     });
     exe.step.dependOn(templates);
-    exe.step.dependOn(render_pages);
     b.installArtifact(exe);
 
     const run_cmd = b.addRunArtifact(exe);
@@ -112,29 +117,15 @@ pub fn build(b: *std.Build) void {
         .root_module = app_modules.main,
     });
     main_tests.step.dependOn(templates);
-    main_tests.step.dependOn(render_pages);
     const run_main_tests = b.addRunArtifact(main_tests);
 
-    // The embedded pages: every route present, unique, and non-empty.
+    // The embedded pages: every route present, unique, and non-empty. The
+    // renderer tool and the layout engine are tested in the zlive package;
+    // a page that fails to render fails `zig build` here.
     const pages_tests = b.addTest(.{
         .root_module = app_modules.pages,
     });
-    pages_tests.step.dependOn(render_pages);
     const run_pages_tests = b.addRunArtifact(pages_tests);
-
-    // The render tool and zlive.layout. The layout engine's tests run in the
-    // zlive package; this covers the app's page list against the engine.
-    const page_render_tests = b.addTest(.{
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/render_pages.zig"),
-            .target = target,
-            .optimize = optimize,
-            .imports = &.{
-                .{ .name = "zlive", .module = zlive_dep.module("zlive") },
-            },
-        }),
-    });
-    const run_page_render_tests = b.addRunArtifact(page_render_tests);
 
     // The table view's state/diff regression test.
     const table_tests = b.addTest(.{
@@ -173,7 +164,6 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_components_tests.step);
     test_step.dependOn(&run_main_tests.step);
     test_step.dependOn(&run_pages_tests.step);
-    test_step.dependOn(&run_page_render_tests.step);
     test_step.dependOn(&run_table_tests.step);
     test_step.dependOn(&run_kitchen_tests.step);
     test_step.dependOn(&run_sidebar_tests.step);

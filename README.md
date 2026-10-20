@@ -64,12 +64,13 @@ loops or variables, because per-session content is a view's job. Text outside
 blocks in a child is ignored (Jinja's rule), and a block that no parent
 defines is a build error.
 
-`src/render_pages.zig` runs the engine at build time and writes
-`src/pages_rendered/` (generated — edit the sources, not this directory);
-`src/pages.zig` embeds those files. The app owns the renderer (it embeds the
-sources, so the build tracks them); the framework's
-`zlive.build.addRenderedPages` runs it and copies the output. A template
-error fails `zig build` with the template name, line and reason.
+The framework renders the pages at build time: `zlive.build.addRenderedPages`
+(in `build.zig`) runs zlive's `zlive-render-pages` tool once per page entry
+with `src/templates/` and `src/pages/` as inputs, and `src/pages.zig` embeds
+the results through the generated `pages_rendered` module. Nothing generated
+lives in the source tree — edit the sources in `src/pages/`, never a rendered
+file. A template error fails `zig build` with the template name, line and
+reason.
 
 ## Production build
 
@@ -114,12 +115,12 @@ from:
 ```
 
 Pages live as templates in `src/pages/` (extending `src/templates/`), are
-rendered at build time into `src/pages_rendered/`, and are pulled in with
-`@embedFile`:
+rendered at build time into the build cache, and are pulled in through the
+generated `pages_rendered` module:
 
 ```zig
 // src/pages.zig
-.{ .path = "/tabs", .file = "tabs.html", .bytes = @embedFile("pages_rendered/tabs.html") },
+.{ .path = "/tabs", .file = "tabs.html", .bytes = rendered.tabs },
 ```
 
 Edit the templates and rebuild (`file` only names the content type; the route
@@ -163,17 +164,14 @@ For e2e, start the server first (`zig build run` or
 
 - `src/main.zig` — the app context (`App`: allocator, io, session registry,
   lock) and the server configuration: pages, embedded assets, `/ws`
-- `src/page_manifest.zig` — the page entry names, shared by `build.zig` and
-  the render tool
 - `src/templates/*.html` — the two parent layouts and the Floating UI
   include: `base.html` (document) and `app.html` (live page)
-- `src/pages/*.html` — the page sources (layout + blocks), plus `theme.js`
-- `src/render_pages.zig` — the build-time renderer: it feeds these sources to
-  `zlive.layout`, and `zlive.build.addRenderedPages` copies the output to
-  `src/pages_rendered/`
-- `src/pages.zig` + `src/pages_rendered/*.html` — routes and the rendered
-  pages embedded with `@embedFile` (under `src/` because that is the module
-  root `@embedFile` is bounded by)
+- `src/pages/*.html` — the page sources (layout + blocks), plus `theme.js`;
+  `build.zig` names the layouts, this directory, and the page entries, and
+  the framework's `addRenderedPages` does the rest
+- `src/pages.zig` — the routes; the rendered pages are embedded from the
+  generated `pages_rendered` module (the cache directory is the module root,
+  so no generated files live under `src/`)
 - `src/handler.zig` — the connection handler: topic dispatch, and the view
   slots (the framework's `Slots` registry) the views operate on
 - `src/notify.zig` — the app's two notification queues: the inline banner
