@@ -66,6 +66,7 @@ pub const Dropdown = zlive_components.Dropdown;
 pub const DropdownPanel = zlive_components.DropdownPanel;
 pub const Popover = zlive_components.Popover;
 pub const Tooltip = zlive_components.Tooltip;
+pub const Chart = zlive_components.Chart;
 pub const Table = zlive_components.Table;
 
 // Layout primitives (structure and spacing only).

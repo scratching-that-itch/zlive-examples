@@ -455,7 +455,7 @@ fn sectionCounter(a: std.mem.Allocator, body: *std.ArrayListUnmanaged(view.Segme
     const icon_sizes = [_]view.Button.Size{ .@"icon-xs", .@"icon-sm", .icon, .@"icon-lg" };
     inline for (icon_sizes) |size| {
         try size_row.appendSlice(a, try view.Button.render(a, .{
-            .label = "&#8942;",
+            .label = "⋮",
             .variant = .ghost,
             .size = size,
             .aria_label = "More",
@@ -731,7 +731,7 @@ fn sectionCard(a: std.mem.Allocator, body: *std.ArrayListUnmanaged(view.Segment)
     // The header action: shadcn's CardAction is usually an icon Button.
     var action: std.ArrayListUnmanaged(view.Segment) = .empty;
     try action.appendSlice(a, try view.Button.render(a, .{
-        .label = "&#8942;",
+        .label = "⋮",
         .variant = .ghost,
         .size = .@"icon-sm",
         .on_click = "inc",
@@ -915,7 +915,7 @@ test "card section: the primitives compose, and an unchanged section diffs empty
             "and an optional footer.</div>" ++
             "<div class=\"zc-card-action\" data-slot=\"card-action\">" ++
             "<button type=\"button\" data-slot=\"button\" data-variant=\"ghost\" data-size=\"icon-sm\" " ++
-            "class=\"btn\" data-lv-click=\"inc\" aria-label=\"Card actions\">&#8942;</button></div></div>" ++
+            "class=\"btn\" data-lv-click=\"inc\" aria-label=\"Card actions\">⋮</button></div></div>" ++
             "<div class=\"zc-card-content\" data-slot=\"card-content\">" ++
             "<div class=\"zc-stack zc-gap-sm zc-align-stretch\">" ++
             "<p>The body is one slot. Here it is a Stack: a paragraph, a " ++

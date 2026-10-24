@@ -97,7 +97,9 @@ pub fn buildCountriesParts(
         cells[3] = .{ .string = try countries_data.formatPop(a, country.pop) };
         cells[4] = .{ .int = country.area_km2 };
         const active = selected != null and selected.? == src_i;
-        cells[5] = .{ .string = try std.fmt.allocPrint(a, "<button type=\"button\" class=\"info-btn{s}\" id=\"country-{d}\" data-lv-click=\"select_country\" data-lv-value=\"{d}\" aria-label=\"Show {s} details\">&#9432;</button>", .{ if (active) " active" else "", src_i, src_i, country.name }) };
+        // The info button is markup by construction: the raw-HTML opt-in
+        // (Scalar.html). Every other cell is text and renders escaped.
+        cells[5] = .{ .html = try std.fmt.allocPrint(a, "<button type=\"button\" class=\"info-btn{s}\" id=\"country-{d}\" data-lv-click=\"select_country\" data-lv-value=\"{d}\" aria-label=\"Show {s} details\">&#9432;</button>", .{ if (active) " active" else "", src_i, src_i, country.name }) };
         rows[dst] = cells;
         row_ids[dst] = try std.fmt.allocPrint(a, "c{d}", .{src_i});
     }

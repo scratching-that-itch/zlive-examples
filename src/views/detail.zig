@@ -58,7 +58,7 @@ pub fn render(a: std.mem.Allocator, state: State) !view.Segment {
     // `class` contract.
     var children: std.ArrayListUnmanaged(view.Segment) = .empty;
     try children.appendSlice(a, try view.Button.render(a, .{
-        .label = "&times;",
+        .label = "×",
         .variant = .ghost,
         .size = .@"icon-sm",
         .class = close_class,

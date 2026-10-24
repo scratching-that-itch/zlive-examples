@@ -129,8 +129,11 @@ fn renderForm(h: *Handler) ![]const view.Segment {
     const a = arena.allocator();
 
     var children: std.ArrayListUnmanaged(view.Segment) = .empty;
-    const name = try util.escapeHtml(a, f.name[0..f.name_len]);
-    const email = try util.escapeHtml(a, f.email[0..f.email_len]);
+    // dupe into the arena: the previous render tree must stay a true
+    // snapshot (the state buffers are edited in place). Escaping is the
+    // client's job ({"s": ...} on the wire).
+    const name = try a.dupe(u8, f.name[0..f.name_len]);
+    const email = try a.dupe(u8, f.email[0..f.email_len]);
     try children.appendSlice(a, try view.TextInput.render(a, .{
         .id = "f-name",
         .value = name,
@@ -181,8 +184,8 @@ fn renderForm(h: *Handler) ![]const view.Segment {
     // portal rule: the dialog is a single node spliced in at view root
     // level, never nested inside the form
     var dialog_children: std.ArrayListUnmanaged(view.Segment) = .empty;
-    const d_name = try util.escapeHtml(a, f.d_name[0..f.d_name_len]);
-    const d_email = try util.escapeHtml(a, f.d_email[0..f.d_email_len]);
+    const d_name = try a.dupe(u8, f.d_name[0..f.d_name_len]);
+    const d_email = try a.dupe(u8, f.d_email[0..f.d_email_len]);
     try dialog_children.appendSlice(a, try view.TextInput.render(a, .{
         .id = "d-name",
         .value = d_name,

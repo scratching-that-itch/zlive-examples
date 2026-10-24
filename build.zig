@@ -48,6 +48,7 @@ pub fn build(b: *std.Build) void {
         .room = b.createModule(.{ .root_source_file = b.path("src/views/room.zig"), .target = target, .optimize = optimize }),
         .sidebar = b.createModule(.{ .root_source_file = b.path("src/views/sidebar.zig"), .target = target, .optimize = optimize }),
         .themes = b.createModule(.{ .root_source_file = b.path("src/views/themes.zig"), .target = target, .optimize = optimize }),
+        .chart = b.createModule(.{ .root_source_file = b.path("src/views/chart.zig"), .target = target, .optimize = optimize }),
     };
     const module_names = @typeInfo(@TypeOf(app_modules)).@"struct".field_names;
     inline for (module_names) |name| {
@@ -81,6 +82,7 @@ pub fn build(b: *std.Build) void {
             "room.html",
             "sidebar.html",
             "themes.html",
+            "chart.html",
             "test-morph.html",
             "test-floating.html",
             "test-dd.html",
@@ -159,6 +161,13 @@ pub fn build(b: *std.Build) void {
     themes_tests.step.dependOn(templates);
     const run_themes_tests = b.addRunArtifact(themes_tests);
 
+    // The chart view's spec builder and sliding window (no socket).
+    const chart_tests = b.addTest(.{
+        .root_module = app_modules.chart,
+    });
+    chart_tests.step.dependOn(templates);
+    const run_chart_tests = b.addRunArtifact(chart_tests);
+
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_zlive_tests.step);
     test_step.dependOn(&run_components_tests.step);
@@ -168,4 +177,5 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_kitchen_tests.step);
     test_step.dependOn(&run_sidebar_tests.step);
     test_step.dependOn(&run_themes_tests.step);
+    test_step.dependOn(&run_chart_tests.step);
 }

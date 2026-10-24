@@ -11,6 +11,7 @@ const zlive_components = @import("zlive_components");
 
 const handler = @import("handler");
 const pages = @import("pages");
+const chart_view = @import("chart");
 
 const log = std.log.scoped(.ziggy);
 
@@ -168,8 +169,10 @@ pub const App = struct {
         // The notification reapers are detached (a closing connection must
         // never wait on one), so a reaper can still be asleep holding a
         // queue's state when the process is ready to exit. Let it notice the
-        // disarm first, or its state is reported as leaked.
+        // disarm first, or its state is reported as leaked. The chart view's
+        // tickers follow the same pattern and get the same wait.
         _ = zlive.http.notify.waitIdle(1000);
+        _ = chart_view.waitIdle(1000);
         self.registry.deinit();
         // Group cells, the global scope and the session list are all
         // allocated with this allocator.

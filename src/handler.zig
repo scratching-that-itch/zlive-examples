@@ -25,6 +25,7 @@ const kitchen_view = @import("kitchen_sink");
 const room_view = @import("room");
 const sidebar_view = @import("sidebar");
 const themes_view = @import("themes");
+const chart_view = @import("chart");
 const notify = @import("notify");
 const view = @import("view");
 
@@ -53,6 +54,7 @@ pub const Handler = struct {
     const room_key = "room";
     const sidebar_key = "sidebar";
     const themes_key = "themes";
+    const chart_key = "chart";
     const banner_key = "banner";
     const toast_key = "toast";
 
@@ -163,6 +165,9 @@ pub const Handler = struct {
     pub fn themes(self: *Handler) ?*themes_view.State {
         return self.get(themes_key, themes_view.State);
     }
+    pub fn chart(self: *Handler) ?*chart_view.State {
+        return self.get(chart_key, chart_view.State);
+    }
 
     pub fn app(self: *Handler) *App {
         return self.service.app;
@@ -183,6 +188,7 @@ pub const Handler = struct {
         if (std.mem.eql(u8, env.topic, countries_view.topic)) return countries_view.handle(self, aa, env);
         if (std.mem.eql(u8, env.topic, kitchen_view.topic)) return kitchen_view.handle(self, aa, env);
         if (std.mem.eql(u8, env.topic, themes_view.topic)) return themes_view.handle(self, aa, env);
+        if (std.mem.eql(u8, env.topic, chart_view.topic)) return chart_view.handle(self, aa, env);
         return self.sendErr(aa, env, "unknown_topic");
     }
 

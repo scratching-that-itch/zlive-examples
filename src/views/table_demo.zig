@@ -201,11 +201,12 @@ fn renderTable(h: *Handler) ![]const view.Segment {
     const rows = try a.alloc([]const view.Scalar, table_rows);
     for (order, 0..) |src, dst| {
         const cells = try a.alloc(view.Scalar, 3);
-        // dupe + escape the name into the arena: the previous render
-        // tree must stay a true snapshot, user input must be escaped
-        cells[0] = .{ .string = try util.escapeHtml(a, t.rows[src].name[0..t.rows[src].name_len]) };
+        // dupe the name into the arena: the previous render tree must stay
+        // a true snapshot. Escaping is the client's job ({"s": ...}).
+        cells[0] = .{ .string = try a.dupe(u8, t.rows[src].name[0..t.rows[src].name_len]) };
         cells[1] = .{ .int = t.rows[src].score };
-        cells[2] = .{ .string = try actionsCell(a, src) };
+        // the actions button is markup by construction: the raw opt-in
+        cells[2] = .{ .html = try actionsCell(a, src) };
         rows[dst] = cells;
     }
     const row_ids = try a.alloc([]const u8, table_rows);
@@ -299,9 +300,9 @@ test "table state: edit produces a one-cell diff" {
             const rows = try a.alloc([]const view.Scalar, table_rows);
             for (&state.rows, 0..) |*row, i| {
                 const cells = try a.alloc(view.Scalar, 3);
-                cells[0] = .{ .string = try util.escapeHtml(a, row.name[0..row.name_len]) };
+                cells[0] = .{ .string = try a.dupe(u8, row.name[0..row.name_len]) };
                 cells[1] = .{ .int = row.score };
-                cells[2] = .{ .string = try actionsCell(a, i) };
+                cells[2] = .{ .html = try actionsCell(a, i) };
                 rows[i] = cells;
             }
             return rows;

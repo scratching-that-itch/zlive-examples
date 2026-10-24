@@ -40,6 +40,7 @@ pub const all = [_]Page{
     .{ .path = "/room", .file = "room.html", .bytes = rendered.room },
     .{ .path = "/sidebar", .file = "sidebar.html", .bytes = rendered.sidebar },
     .{ .path = "/themes", .file = "themes.html", .bytes = rendered.themes },
+    .{ .path = "/chart", .file = "chart.html", .bytes = rendered.chart },
     // Dev-only isolation probes (morphdom keyed reorder, Floating UI load,
     // dropdown positioning). They extend the plain document layout.
     .{ .path = "/test-morph.html", .file = "test-morph.html", .bytes = rendered.test_morph },
