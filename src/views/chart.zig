@@ -1,107 +1,45 @@
 // view:chart — live charts (Apache ECharts) fed by a server-side ticker.
 //
-// Two patterns meet here:
+// The view is only its business logic: the random walk, the spec builders,
+// the render. Mount, the patch loop and the ticker thread come from
+// zlive.http.Live (ADR-024). Two patterns meet here:
 //
 //  - the Chart component (zlive-components): the view renders the ECharts
 //    option JSON into the data-lv-chart attribute and the zc-chart hook
 //    owns the canvas — the element carries data-lv-ignore, so morphdom
-//    morphs the attribute but never touches the DOM ECharts drew. A tick is
-//    therefore exactly one attribute patch per chart.
+//    morphs the attribute but never touches the DOM ECharts drew (ADR-023).
+//    A tick is therefore exactly one attribute patch per chart.
 //
-//  - the ticker: a detached thread in the shape of the notification
-//    reaper (zlive/src/notify.zig) — a refcounted, disarmable Ticker that
-//    sleeps, takes the app lock, advances the series, re-renders and pushes
-//    the patch. State.deinit (run by the slot teardown, under the app lock)
-//    disarms it, so a sleeping ticker can never touch freed view state.
+//  - the ticker: Live's detached thread (same shape as the notification
+//    reaper, zlive/src/notify.zig) sleeps, takes the app lock, advances the
+//    series and pushes the patch.
 //
 // Four charts read one random walk: the line and bar charts show the
 // window, the gauge shows the latest value, the pie shows the window's
 // distribution — four ways to slice the same data, one patch each.
 
 const std = @import("std");
-const protocol = @import("zlive").protocol;
+const zlive = @import("zlive");
+const protocol = zlive.protocol;
 const view = @import("view");
 const Handler = @import("handler").Handler;
 const App = @import("main").App;
 
-const log = std.log.scoped(.ziggy);
-
-pub const topic = "view:chart";
-
 /// Points in the visible window; a tick shifts the window left by one.
 const window = 30;
-/// Tick interval, milliseconds.
-const interval_ms: u64 = 1000;
 /// Points the view seeds itself with, so the first render is not empty.
 const seed_points = 8;
 
-/// Live ticker threads, process-wide — the join-in-spirit for a detached
-/// thread, exactly like the notification reapers' counter: the app waits
-/// for it at shutdown instead of exiting with a ticker's state allocated.
-var tickers: std.atomic.Value(usize) = .init(0);
-
-/// Waits (up to `timeout_ms`) for every ticker to exit, and returns whether
-/// they all did. Called from App.shutdown, next to the reapers' waitIdle.
-pub fn waitIdle(timeout_ms: u64) bool {
-    var waited: u64 = 0;
-    while (tickers.load(.acquire) != 0) {
-        if (waited >= timeout_ms) return false;
-        sleepMs(2);
-        waited += 2;
-    }
-    return true;
-}
-
-/// The ticking half of the view. Deliberately a separate, refcounted
-/// allocation from the slot cell — the slot registry frees the *cell* on
-/// close while a ticker may still be sleeping, so the thread's pointer must
-/// not be the cell (the same split as a notification queue's Inner).
-const Ticker = struct {
-    refs: std.atomic.Value(u32),
-    /// Disarmed by State.deinit. Read (under the app lock) before the
-    /// ticker touches anything else.
-    alive: std.atomic.Value(bool),
-    app: *App,
-    /// Only ever used after the alive check, under the app lock.
-    handler: *Handler,
-
-    fn drop(self: *Ticker) void {
-        if (self.refs.fetchSub(1, .acq_rel) == 1) self.app.allocator.destroy(self);
-    }
-};
-
-pub const State = struct {
+const State = struct {
     rng: std.Random.DefaultPrng,
     last: i64 = 50,
     values: [window]i64 = undefined,
     len: usize = 0,
-    // ping-pong arenas/trees: diff needs the previous and current trees
-    // alive at the same time
-    arenas: [2]std.heap.ArenaAllocator,
-    trees: [2][]const view.Segment = .{ &.{}, &.{} },
-    active_tree: usize = 0,
-    ticker: ?*Ticker = null,
 
-    pub fn init(allocator: std.mem.Allocator) State {
+    pub fn init(_: std.mem.Allocator) State {
         return .{
             .rng = std.Random.DefaultPrng.init(@bitCast(App.nowMs())),
-            .arenas = .{
-                std.heap.ArenaAllocator.init(allocator),
-                std.heap.ArenaAllocator.init(allocator),
-            },
         };
-    }
-
-    pub fn deinit(self: *State) void {
-        // Runs from the slot teardown, under the app lock: disarming here is
-        // what keeps a sleeping ticker from ever touching this state again.
-        if (self.ticker) |t| {
-            t.alive.store(false, .release);
-            t.drop();
-            self.ticker = null;
-        }
-        self.arenas[0].deinit();
-        self.arenas[1].deinit();
     }
 
     /// One step of the random walk: clamped to the chart's y range.
@@ -201,12 +139,7 @@ fn pieSpec(a: std.mem.Allocator, values: []const i64) ![]const u8 {
     return out.items;
 }
 
-fn renderTree(m: *State) ![]const view.Segment {
-    const next = 1 - m.active_tree;
-    _ = m.arenas[next].reset(.retain_capacity);
-    const a = m.arenas[next].allocator();
-    m.active_tree = next;
-
+fn render(_: *Handler, m: *State, a: std.mem.Allocator) ![]const view.Segment {
     const tree = try a.alloc(view.Segment, 7);
     tree[0] = .text("<p>One random walk, four charts: a server tick every second pushes one spec-attribute patch per chart — the differ never enters a canvas.</p>");
     tree[1] = .text("<div class=\"charts-grid\">");
@@ -231,131 +164,33 @@ fn renderTree(m: *State) ![]const view.Segment {
         .height = "260px",
     }) };
     tree[6] = .text("</div>");
-    m.trees[next] = tree;
     return tree;
 }
 
-pub fn handle(h: *Handler, aa: std.mem.Allocator, env: *const protocol.Envelope) !void {
-    if (std.mem.eql(u8, env.event, "join")) {
-        return mount(h, aa, env);
-    }
-    _ = h.chart() orelse return h.sendErr(aa, env, "not_joined");
-    return h.sendErr(aa, env, "unknown_event");
+/// Seed the window so the first render is not empty.
+fn onMount(_: *Handler, m: *State, _: *const protocol.Envelope) !void {
+    while (m.len < seed_points) m.advance();
 }
 
-fn mount(h: *Handler, aa: std.mem.Allocator, env: *const protocol.Envelope) !void {
-    const m = try h.ensure("chart", State, State.init);
-    h.app().lock();
-    const json = blk: {
-        defer h.app().unlock();
-        while (m.len < seed_points) m.advance();
-        const tree = try renderTree(m);
-        log.info("mounted {s}", .{topic});
-        const render = protocol.Envelope{
-            .type = .message,
-            .topic = topic,
-            .event = "render",
-            .payload = try view.treeToValue(aa, tree),
-            .ref = env.ref,
-        };
-        break :blk try render.encode(aa);
-    };
-    try spawnTicker(h, m);
-    try h.service.conn.write(json);
-}
-
-fn spawnTicker(h: *Handler, m: *State) !void {
-    if (m.ticker != null) return; // a rejoin keeps its ticker
-    const t = try h.app().allocator.create(Ticker);
-    t.* = .{
-        // one reference for the state cell, one for the thread
-        .refs = .init(2),
-        .alive = .init(true),
-        .app = h.app(),
-        .handler = h,
-    };
-    m.ticker = t;
-    // Counted before the spawn so a concurrent waitIdle cannot see a quiet
-    // process between the thread starting and being counted.
-    _ = tickers.fetchAdd(1, .release);
-    const thread = std.Thread.spawn(.{}, tickerMain, .{t}) catch {
-        _ = tickers.fetchSub(1, .release);
-        m.ticker = null;
-        h.app().allocator.destroy(t);
-        return error.ThreadSpawnFailed;
-    };
-    thread.detach();
-}
-
-/// The ticker's whole loop: sleep, then under the app lock advance the
-/// series and push the patch; between wakeups it holds nothing.
-fn tickerMain(t: *Ticker) void {
-    // The reference is dropped (and the state freed) before the thread is
-    // counted as gone, so a waiter that sees zero can trust that everything
-    // a ticker held is released.
-    defer {
-        t.drop();
-        _ = tickers.fetchSub(1, .release);
-    }
-    while (true) {
-        sleepMs(interval_ms);
-        t.app.lock();
-        if (!t.alive.load(.acquire)) {
-            t.app.unlock();
-            return;
-        }
-        tickLocked(t.handler);
-        t.app.unlock();
-    }
-}
-
-/// Runs with the app lock held (the ticker holds it): advance the series
-/// and push the patch, exactly as an event would.
-fn tickLocked(h: *Handler) void {
-    const m = h.chart() orelse return;
+fn onTick(_: *Handler, m: *State) void {
     m.advance();
-    var arena = std.heap.ArenaAllocator.init(h.app().allocator);
-    defer arena.deinit();
-    pushUpdate(h, arena.allocator(), null) catch |err| {
-        log.warn("chart tick failed: {t}", .{err});
-    };
 }
 
-fn pushUpdate(h: *Handler, aa: std.mem.Allocator, ref: ?u64) !void {
-    const m = h.chart().?;
-    // Lock held from render through encode (recursive: the ticker already
-    // holds it), so the tree the diff reads cannot change under it.
-    h.app().lock();
-    const json = blk: {
-        defer h.app().unlock();
-        const previous = m.trees[m.active_tree];
-        const current = try renderTree(m);
-        var patches = try view.diff(aa, previous, current);
-        defer patches.deinit();
-        const reply = protocol.Envelope{
-            .type = .message,
-            .topic = topic,
-            .event = "patch",
-            .payload = try patches.toValue(aa),
-            .ref = ref,
-        };
-        break :blk try reply.encode(aa);
-    };
-    try h.service.conn.write(json);
-}
+pub const api = zlive.http.Live(App, .{
+    .topic = "view:chart",
+    .State = State,
+    .render = render,
+    .onMount = onMount,
+    .tick_ms = 1000,
+    .onTick = onTick,
+});
 
-/// Sleep for `ms`, uninterruptibly — same reasoning as the notification
-/// reaper's sleepMs (zlive/src/notify.zig).
-fn sleepMs(ms: u64) void {
-    var req: std.posix.timespec = .{
-        .sec = @intCast(ms / 1000),
-        .nsec = @intCast((ms % 1000) * std.time.ns_per_ms),
-    };
-    while (std.posix.errno(std.posix.system.nanosleep(&req, &req)) == .INTR) {}
-}
+// The uniform surface the handler's dispatch registry routes by.
+pub const topic = api.topic;
+pub const handle = api.handle;
 
 // ---------------------------------------------------------------------
-// Tests: the spec builder and the window, without a socket.
+// Tests: the spec builders and the window, without a socket.
 // ---------------------------------------------------------------------
 
 const testing = std.testing;
@@ -414,7 +249,6 @@ test "pieSpec buckets sum to the window length" {
 
 test "advance fills the window, then slides it" {
     var state = State.init(testing.allocator);
-    defer state.deinit();
 
     for (0..window) |_| state.advance();
     try testing.expectEqual(@as(usize, window), state.len);
@@ -428,7 +262,6 @@ test "advance fills the window, then slides it" {
 
 test "advance stays inside the chart's y range" {
     var state = State.init(testing.allocator);
-    defer state.deinit();
 
     for (0..500) |_| state.advance();
     for (state.values[0..state.len]) |v| {
@@ -437,17 +270,18 @@ test "advance stays inside the chart's y range" {
 }
 
 test "a tick is one spec-attribute patch per chart" {
-    var state = State.init(testing.allocator);
-    defer state.deinit();
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
 
+    var state = State.init(testing.allocator);
+    // render ignores the handler; the arena keeps both trees alive, which
+    // is all the diff needs.
+    var dummy: Handler = undefined;
     while (state.len < seed_points) state.advance();
-    _ = try renderTree(&state);
-    const previous = state.trees[state.active_tree];
+    const previous = try render(&dummy, &state, a);
     state.advance();
-    const current = try renderTree(&state);
+    const current = try render(&dummy, &state, a);
 
     var patches = try view.diff(a, previous, current);
     defer patches.deinit();

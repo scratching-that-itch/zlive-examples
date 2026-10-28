@@ -172,7 +172,7 @@ pub const App = struct {
         // disarm first, or its state is reported as leaked. The chart view's
         // tickers follow the same pattern and get the same wait.
         _ = zlive.http.notify.waitIdle(1000);
-        _ = chart_view.waitIdle(1000);
+        _ = chart_view.api.waitIdle(1000);
         self.registry.deinit();
         // Group cells, the global scope and the session list are all
         // allocated with this allocator.

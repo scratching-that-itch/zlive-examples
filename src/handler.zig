@@ -44,8 +44,8 @@ pub const Handler = struct {
     slots: Slots(8),
 
     // Slot keys. A connection typically mounts one view, so the states
-    // below are addressed by name rather than by field.
-    const counter_key = "counter";
+    // below are addressed by name rather than by field. Live-ported views
+    // (counter, chart) need no key here: their api keys cells on the topic.
     const table_key = "table";
     const form_key = "form";
     const tabs_key = "tabs";
@@ -101,7 +101,7 @@ pub const Handler = struct {
         self.app().lock();
         defer self.app().unlock();
         self.app().store.detach(self);
-        if (self.counter()) |m| {
+        if (counter_view.api.state(self)) |m| {
             if (self.service.token) |t| {
                 // Park the view state so a rejoin within the TTL can
                 // restore it instead of mounting fresh.
@@ -136,11 +136,10 @@ pub const Handler = struct {
         return self.slots.put(State, key, value);
     }
 
-    /// Named accessors for the demo's views. Every one is a slot lookup:
-    /// the registry is the storage, these are the app's ergonomic names.
-    pub fn counter(self: *Handler) ?*counter_view.State {
-        return self.get(counter_key, counter_view.State);
-    }
+    /// Named accessors for the demo's manual views. Every one is a slot
+    /// lookup: the registry is the storage, these are the app's ergonomic
+    /// names. Live-ported views need none — their `api.state(handler)`
+    /// does the same lookup keyed on the topic.
     pub fn table(self: *Handler) ?*table_view.State {
         return self.get(table_key, table_view.State);
     }
@@ -165,9 +164,6 @@ pub const Handler = struct {
     pub fn themes(self: *Handler) ?*themes_view.State {
         return self.get(themes_key, themes_view.State);
     }
-    pub fn chart(self: *Handler) ?*chart_view.State {
-        return self.get(chart_key, chart_view.State);
-    }
 
     pub fn app(self: *Handler) *App {
         return self.service.app;
@@ -177,18 +173,27 @@ pub const Handler = struct {
     // Dispatch
     // ---------------------------------------------------------------
 
+    /// Every view the app routes, in one list: a view joins it by
+    /// exporting `topic` and `handle` (manual views directly, Live views
+    /// re-exported from their `api`).
+    const view_modules = .{
+        room_view,
+        sidebar_view,
+        counter_view,
+        table_view,
+        form_view,
+        tabs_view,
+        countries_view,
+        kitchen_view,
+        themes_view,
+        chart_view,
+    };
+
     /// Routes a decoded envelope to its view by topic.
     pub fn dispatch(self: *Handler, aa: std.mem.Allocator, env: *const protocol.Envelope) !void {
-        if (std.mem.eql(u8, env.topic, room_view.topic)) return room_view.handle(self, aa, env);
-        if (std.mem.eql(u8, env.topic, sidebar_view.topic)) return sidebar_view.handle(self, aa, env);
-        if (std.mem.eql(u8, env.topic, counter_view.topic)) return counter_view.handle(self, aa, env);
-        if (std.mem.eql(u8, env.topic, table_view.topic)) return table_view.handle(self, aa, env);
-        if (std.mem.eql(u8, env.topic, form_view.topic)) return form_view.handle(self, aa, env);
-        if (std.mem.eql(u8, env.topic, tabs_view.topic)) return tabs_view.handle(self, aa, env);
-        if (std.mem.eql(u8, env.topic, countries_view.topic)) return countries_view.handle(self, aa, env);
-        if (std.mem.eql(u8, env.topic, kitchen_view.topic)) return kitchen_view.handle(self, aa, env);
-        if (std.mem.eql(u8, env.topic, themes_view.topic)) return themes_view.handle(self, aa, env);
-        if (std.mem.eql(u8, env.topic, chart_view.topic)) return chart_view.handle(self, aa, env);
+        inline for (view_modules) |v| {
+            if (std.mem.eql(u8, env.topic, v.topic)) return v.handle(self, aa, env);
+        }
         return self.sendErr(aa, env, "unknown_topic");
     }
 
@@ -206,7 +211,7 @@ pub const Handler = struct {
     /// showing the relevant view — every view's `flush` returns immediately
     /// when it is not mounted.
     pub fn flush(self: *Handler) void {
-        counter_view.flush(self);
+        counter_view.api.flush(self);
         kitchen_view.flush(self);
         room_view.flush(self);
     }
